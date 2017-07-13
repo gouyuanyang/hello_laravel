@@ -12,6 +12,7 @@ use Illuminate\View\View;
 use App\Models\User;
 
 use Auth;
+use Mail;
 
 class UsersController extends Controller
 {
@@ -20,7 +21,7 @@ class UsersController extends Controller
     {
         //已登录的用户访问
         $this->middleware('auth', [
-            'only' => ['edit', 'update', 'destroy']
+            'only' => ['edit', 'update', 'destroy', 'show']
         ]);
 
         //未登录的用户访问
@@ -60,9 +61,8 @@ class UsersController extends Controller
             'password' => bcrypt($request->password)
         ]);
 
-        Auth::login($user);
-        session()->flash('success', '欢迎，您将在这里开启一段新的旅程～');
-        return redirect()->route('users.show', [$user]);
+        $this->sendEmailConfirmationTo($user);
+        return redirect('/');
     }
 
     public function edit($id)
@@ -101,5 +101,32 @@ class UsersController extends Controller
         $user->delete();
         session()->flash('success', '成功删除用户！');
         return back();
+    }
+
+    public function sendEmailConfirmationTo($user)
+    {
+        $view = 'emails.confirm';
+        $data = compact('user');
+        $from = '1184323775@qq.com';
+        $name = 'James';
+        $to = $user->email;
+        $subject = "感谢注册 Ceshi 应用！请确认你的邮箱。";
+
+        Mail::send($view, $data, function ($message) use ($from, $name, $to, $subject) {
+            $message->from($from, $name)->to($to)->subject($subject);
+        });
+    }
+
+    public function confirmEmail($token)
+    {
+        $user = User::where('activation_token', $token)->firstOrFail();
+
+        $user->activated = true;
+        $user->activation_token = null;
+        $user->save();
+
+        Auth::login($user);
+        session()->flash('success', '恭喜你，激活成功！');
+        return redirect()->route('users.show', [$user]);
     }
 }
